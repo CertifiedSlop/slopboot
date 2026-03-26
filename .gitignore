@@ -1,0 +1,18 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Build artifacts and dynamic ESP
+/build/
+/esp/
+*.efi
+*.img
+*.iso
+*.pdb
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Ignored test binaries (so you can drop them in locally without committing)
+/test_binaries/

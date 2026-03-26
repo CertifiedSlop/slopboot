@@ -1,0 +1,8 @@
+[package]
+name = "slopboot"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+uefi = { version = "0.37.0", features = ["alloc", "global_allocator", "panic_handler", "logger", "qemu"] }
+log = "0.4"

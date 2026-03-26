@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: x86_64-unknown-uefi
+
+    - name: Build Bootloader
+      run: cargo build --target x86_64-unknown-uefi --release
+
+    - name: Run clippy
+      run: cargo clippy --target x86_64-unknown-uefi -- -D warnings
+
+    - name: Upload EFI artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: slopboot-efi
+        path: target/x86_64-unknown-uefi/release/slopboot.efi
