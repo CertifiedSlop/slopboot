@@ -54,6 +54,169 @@ cargo build --target x86_64-unknown-uefi --release
 
 The compiled bootloader will be located at `target/x86_64-unknown-uefi/release/slopboot.efi`.
 
+## 🐧 Building on NixOS
+
+This project includes a Nix flake for reproducible builds on NixOS.
+
+### Quick Start
+
+One-off build without modifying your system configuration:
+
+```bash
+nix build github:CertifiedSlop/slopboot#slopboot
+```
+
+Or build from a local checkout:
+
+```bash
+git clone https://github.com/CertifiedSlop/slopboot.git
+cd slopboot
+nix build .#slopboot
+```
+
+### Prerequisites
+
+Enable flakes if you haven't already. Add the following to your `/etc/nixos/configuration.nix`:
+
+```nix
+{
+  nix.settings.experimental-features = [ "nix-command" "flakes" ];
+}
+```
+
+Then rebuild your system:
+
+```bash
+sudo nixos-rebuild switch
+```
+
+### Adding slopboot as a Flake Input
+
+To integrate slopboot into your NixOS configuration, add it as a flake input:
+
+**`flake.nix`** (in your NixOS configuration directory, e.g., `/etc/nixos/flake.nix`):
+
+```nix
+{
+  description = "My NixOS Configuration";
+
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    slopboot.url = "github:CertifiedSlop/slopboot";
+  };
+
+  outputs = { self, nixpkgs, slopboot }: {
+    nixosConfigurations.my-machine = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        ./configuration.nix
+        # Optional: Use slopboot package from the flake
+        ({ pkgs, ... }: {
+          environment.systemPackages = [
+            slopboot.packages.${pkgs.system}.slopboot
+          ];
+        })
+      ];
+    };
+  };
+}
+```
+
+### Referencing the Package in configuration.nix
+
+Once added as a flake input, reference the slopboot package in your `configuration.nix`:
+
+```nix
+{ pkgs, ... }: {
+  # Install slopboot to your system PATH for manual EFI installation
+  environment.systemPackages = [
+    pkgs.slopboot  # If using nixpkgs, or:
+    # inputs.slopboot.packages.${pkgs.system}.slopboot  # If using flake input
+  ];
+
+  # Optional: Copy slopboot.efi to the EFI System Partition
+  boot.loader.efi.efiSysMountPoint = "/boot";
+  # Manual deployment after build:
+  # sudo cp $(nix build .#slopboot --print-out-paths)/target/x86_64-unknown-uefi/release/slopboot.efi /boot/EFI/BOOT/BOOTX64.EFI
+}
+```
+
+### Development Shell
+
+Enter the development shell with all required dependencies:
+
+```bash
+nix develop
+```
+
+Inside the dev shell, you can build using standard Cargo commands:
+
+```bash
+cargo build --target x86_64-unknown-uefi --release
+```
+
+The dev shell provides:
+- Rust toolchain (rustc, cargo)
+- LLVM/clang for bindgen dependencies
+- Pre-configured environment for UEFI target builds
+- Custom `RUSTFLAGS` for UEFI target linking
+
+**Run tests in the dev shell:**
+
+```bash
+nix develop
+cargo test --target x86_64-unknown-uefi
+```
+
+**Format and lint:**
+
+```bash
+nix develop
+cargo fmt --check
+cargo clippy --target x86_64-unknown-uefi -- -D warnings
+```
+
+### Build Output Locations
+
+| Build Method | Output Path | Access |
+|--------------|-------------|--------|
+| `nix build .#slopboot` | `./result/` | Symlink to `/nix/store/<hash>-slopboot-0.1.0/` |
+| Flake package | `/nix/store/<hash>-slopboot-0.1.0/` | Read-only Nix store |
+| Dev shell cargo build | `./target/x86_64-unknown-uefi/release/slopboot.efi` | Standard Cargo output |
+
+**Access the built EFI binary:**
+
+```bash
+# After 'nix build .#slopboot':
+ls -la result/target/x86_64-unknown-uefi/release/slopboot.efi
+
+# Or print the exact store path:
+nix build .#slopboot --print-out-paths
+```
+
+### Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| `error: experimental Nix feature 'flakes' is disabled` | Enable flakes in `/etc/nixos/configuration.nix` and run `sudo nixos-rebuild switch` |
+| `libclang not found` or bindgen errors | Ensure `llvmPackages.libclang` is in `buildInputs` (already configured in flake) |
+| Build fails with linker errors | Run `nix develop` first to get the correct `RUSTFLAGS` environment |
+| `result` symlink not created | Use `nix build .#slopboot` (not `nix-build`) for flake builds |
+| Cannot write to `/nix/store` | Nix store is immutable; use `nix develop` for local builds or copy from `result/` |
+| QEMU test fails with OVMF errors | Ensure `ovmf` package is installed: `nix-shell -p qemu_kvm ovmf` |
+
+**Get build logs:**
+
+```bash
+nix build .#slopboot -L
+```
+
+**Rebuild from scratch (clean build):**
+
+```bash
+nix build .#slopboot --rebuild
+```
+
 ## 🧪 Testing Locally (QEMU)
 
 We've decoupled the ESP into a volatile staging script, making local testing ridiculously easy.
